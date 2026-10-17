@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -t . -v
+
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: audit
+        with:
+          app: tests/fixtures/sample
+          json-file: report.json
+          comment-file: comment.md
+      - name: Check outputs
+        run: |
+          cat comment.md
+          test "${{ steps.audit.outputs.missing }}" = "1"
+          test "${{ steps.audit.outputs.locales-with-gaps }}" = "1"
+          test "${{ steps.audit.outputs.locales }}" = "3"
+
+      # The exit code is the point of --fail-on; a self-test that never
+      # exercises it would not notice the action swallowing it.
+      - name: fail-on missing must fail
+        continue-on-error: true
+        id: should_fail
+        uses: ./
+        with:
+          app: tests/fixtures/sample
+          fail-on: missing
+      - run: |
+          test "${{ steps.should_fail.outcome }}" = "failure"

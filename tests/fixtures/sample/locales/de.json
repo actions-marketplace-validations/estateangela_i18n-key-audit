@@ -1,0 +1,19 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Abbrechen"
+  },
+  "home": {
+    "title": "Startseite",
+    "greeting": "Willkommen"
+  },
+  "errors": {
+    "network": "Netzwerk nicht verfügbar"
+  },
+  "legacy": {
+    "removed": "Niemand rendert das"
+  },
+  "extra": {
+    "only_here": "Nur hier"
+  }
+}

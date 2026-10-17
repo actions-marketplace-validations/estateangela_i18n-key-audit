@@ -1,0 +1,126 @@
+name: i18n Key Audit
+description: Find translation keys that are used but undefined, or missing from a locale.
+author: Angela Shih
+branding:
+  icon: globe
+  color: purple
+
+inputs:
+  app:
+    description: Project root (check it out first).
+    required: false
+    default: "."
+  locales:
+    description: >-
+      Globs for the translation files, relative to `app`, newline or comma
+      separated. Auto-detected when omitted.
+    required: false
+    default: ""
+  base:
+    description: Reference locale. English, or the largest file, when omitted.
+    required: false
+    default: ""
+  source:
+    description: >-
+      Globs for the sources to scan, newline or comma separated. All of them
+      when omitted.
+    required: false
+    default: ""
+  json-file:
+    description: Write the full report here.
+    required: false
+    default: ""
+  csv-file:
+    description: Write a per-locale summary here.
+    required: false
+    default: ""
+  comment-file:
+    description: Write a pull request comment as markdown here.
+    required: false
+    default: ""
+  fail-on:
+    description: >-
+      Fail the job on `missing` (keys used in code but undefined), `gaps`
+      (locales missing keys), `any`, or `none`.
+    required: false
+    default: none
+
+outputs:
+  missing:
+    description: Keys referenced in code but absent from the base locale.
+    value: ${{ steps.run.outputs.missing }}
+  locales-with-gaps:
+    description: How many locales are missing at least one key.
+    value: ${{ steps.run.outputs.locales-with-gaps }}
+  locales:
+    description: How many locale files were found.
+    value: ${{ steps.run.outputs.locales }}
+  unused:
+    description: Keys defined but never referenced (advisory -- see README).
+    value: ${{ steps.run.outputs.unused }}
+  base:
+    description: The locale used as the reference.
+    value: ${{ steps.run.outputs.base }}
+  json:
+    description: Path to the JSON report, when `json-file` was given.
+    value: ${{ steps.run.outputs.json }}
+  comment:
+    description: Path to the markdown comment, when `comment-file` was given.
+    value: ${{ steps.run.outputs.comment }}
+
+runs:
+  # Composite rather than Docker: standard-library Python, nothing to build.
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        APP: ${{ inputs.app }}
+        LOCALES: ${{ inputs.locales }}
+        BASE: ${{ inputs.base }}
+        SOURCE: ${{ inputs.source }}
+        JSON_FILE: ${{ inputs.json-file }}
+        CSV_FILE: ${{ inputs.csv-file }}
+        COMMENT_FILE: ${{ inputs.comment-file }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -euo pipefail
+        args=(--app "$APP" --fail-on "$FAIL_ON")
+
+        add_globs() {
+          local flag="$1" value="$2"
+          while IFS= read -r g; do
+            [ -n "$g" ] && args+=("$flag" "$g")
+          done <<< "$(printf '%s' "$value" | tr ',' '\n')"
+        }
+        [ -n "$LOCALES" ] && add_globs --locales "$LOCALES"
+        [ -n "$SOURCE" ] && add_globs --source "$SOURCE"
+        [ -n "$BASE" ] && args+=(--base "$BASE")
+
+        # The JSON report is always produced: the outputs are read from it,
+        # so there is one source of truth rather than a second parse of the
+        # human-readable text.
+        REPORT="${JSON_FILE:-$RUNNER_TEMP/i18n-key-audit.json}"
+        args+=(--json "$REPORT")
+        [ -n "$CSV_FILE" ] && args+=(--csv "$CSV_FILE")
+        [ -n "$COMMENT_FILE" ] && args+=(--comment "$COMMENT_FILE")
+
+        # Keep the exit code: --fail-on is the whole point of running in CI.
+        set +e
+        PYTHONPATH="$GITHUB_ACTION_PATH" python3 -m i18n_key_audit "${args[@]}"
+        code=$?
+        set -e
+
+        PYTHONPATH="$GITHUB_ACTION_PATH" python3 - "$REPORT" >> "$GITHUB_OUTPUT" <<'PY'
+        import json, sys
+        r = json.load(open(sys.argv[1], encoding="utf-8"))
+        gaps = [l for l in r["locales"] if l["missing"]]
+        print(f"missing={len(r['missing'])}")
+        print(f"locales-with-gaps={len(gaps)}")
+        print(f"locales={len(r['locales']) + 1}")
+        print(f"unused={len(r['possibly_unused'])}")
+        print(f"base={r['base']}")
+        PY
+        [ -n "$JSON_FILE" ] && echo "json=$JSON_FILE" >> "$GITHUB_OUTPUT"
+        [ -n "$COMMENT_FILE" ] && echo "comment=$COMMENT_FILE" >> "$GITHUB_OUTPUT"
+        exit $code

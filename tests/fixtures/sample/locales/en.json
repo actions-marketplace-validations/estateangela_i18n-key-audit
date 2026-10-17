@@ -1,0 +1,16 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
+  "home": {
+    "title": "Home",
+    "greeting": "Welcome back"
+  },
+  "errors": {
+    "network": "Network unavailable"
+  },
+  "legacy": {
+    "removed": "Nobody renders this"
+  }
+}

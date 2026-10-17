@@ -1,0 +1,10 @@
+{
+  "common": {
+    "ok": "好",
+    "cancel": "取消"
+  },
+  "home": {
+    "title": "首頁",
+    "greeting": "Welcome back"
+  }
+}
